@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="./supabase-config.js"></script>
+<script src="./shopping-api.js"></script>
 </head>
 <body>
 <x-dc>
@@ -355,14 +358,23 @@
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.08em;margin-bottom:6px">רשימת קניות</div>
         <h2 style="font-size:30px;color:var(--olive-d)">מה צריך לקנות</h2>
-        <p style="color:var(--muted);margin-top:6px;font-size:15px">כמויות מחושבות ל-{{ family.people }} נפשות. מוצרים שסימנתם בבית מופיעים בנפרד.</p>
+        <p style="color:var(--muted);margin-top:6px;font-size:15px">הרשימה משותפת לכל בני המשפחה ומתעדכנת בזמן אמת. כמויות מחושבות ל-{{ family.people }} נפשות.</p>
       </div>
       <button onClick="{{ exportWhatsapp }}" style="padding:12px 18px;border-radius:13px;border:none;background:#25794F;color:#fff;font-size:14.5px;font-weight:700;cursor:pointer">שיתוף ל-WhatsApp</button>
     </div>
 
+    <sc-if value="{{ shoppingLoading }}" hint-placeholder-val="{{ false }}">
+      <div style="text-align:center;padding:50px 20px;color:var(--muted)">טוען את רשימת הקניות...</div>
+    </sc-if>
+
+    <sc-if value="{{ shoppingError }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#FBEAEA;border:1px solid #E7C6C6;color:#A34848;border-radius:14px;padding:14px 18px;margin-bottom:18px;font-size:14.5px">{{ shoppingError }}</div>
+    </sc-if>
+
+    <sc-if value="{{ shoppingReady }}" hint-placeholder-val="{{ true }}">
     <div style="display:grid;grid-template-columns:1.5fr .9fr;gap:22px">
       <div>
-        <sc-for list="{{ shopCats }}" as="g" hint-placeholder-count="9">
+        <sc-for list="{{ shopCats }}" as="g" hint-placeholder-count="10">
           <div style="background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:16px 20px;margin-bottom:14px;box-shadow:var(--sh2)">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:{{ g.headGap }}">
               <div style="display:flex;align-items:center;gap:10px">
@@ -381,8 +393,19 @@
                     <div style="flex:1;{{ it.strike }}">
                       <span style="font-weight:600;font-size:15px">{{ it.name }}</span>
                       <span style="color:var(--muted);font-size:13px;margin-right:8px">{{ it.qty }}</span>
+                      <sc-if value="{{ it.hasNote }}" hint-placeholder-val="{{ false }}">
+                        <div style="color:var(--muted);font-size:12.5px;margin-top:2px">{{ it.note }}</div>
+                      </sc-if>
                     </div>
-                    <button onClick="{{ it.remove }}" style="width:26px;height:26px;border-radius:7px;border:none;background:var(--paper2);color:#B25A4E;font-size:15px;cursor:pointer">×</button>
+                    <sc-if value="{{ it.confirming }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;gap:6px;flex-shrink:0">
+                        <button onClick="{{ it.confirmRemove }}" style="padding:6px 10px;border-radius:8px;border:none;background:#B25A4E;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">מחק</button>
+                        <button onClick="{{ it.cancelRemove }}" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--paper2);color:var(--muted);font-size:12.5px;cursor:pointer">ביטול</button>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ it.notConfirming }}" hint-placeholder-val="{{ true }}">
+                      <button onClick="{{ it.askRemove }}" style="width:26px;height:26px;border-radius:7px;border:none;background:var(--paper2);color:#B25A4E;font-size:15px;cursor:pointer;flex-shrink:0">×</button>
+                    </sc-if>
                   </div>
                 </sc-for>
               </div>
@@ -392,6 +415,30 @@
             </sc-if>
           </div>
         </sc-for>
+
+        <sc-if value="{{ hasPurchased }}" hint-placeholder-val="{{ false }}">
+          <div style="background:var(--paper2);border:1px dashed var(--line);border-radius:18px;padding:16px 20px;margin-top:8px">
+            <div style="font-weight:700;font-size:15px;color:var(--muted);margin-bottom:10px">נקנו ({{ purchasedCount }})</div>
+            <sc-for list="{{ purchasedItems }}" as="it" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--paper)">
+                <button onClick="{{ it.toggle }}" style="width:24px;height:24px;border-radius:7px;border:1.5px solid {{ it.boxBd }};background:{{ it.boxBg }};cursor:pointer;color:#fff;font-size:14px;line-height:1;flex-shrink:0">{{ it.mark }}</button>
+                <div style="flex:1;{{ it.strike }}">
+                  <span style="font-weight:600;font-size:15px">{{ it.name }}</span>
+                  <span style="color:var(--muted);font-size:13px;margin-right:8px">{{ it.qty }}</span>
+                </div>
+                <sc-if value="{{ it.confirming }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:6px;flex-shrink:0">
+                    <button onClick="{{ it.confirmRemove }}" style="padding:6px 10px;border-radius:8px;border:none;background:#B25A4E;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer">מחק</button>
+                    <button onClick="{{ it.cancelRemove }}" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--muted);font-size:12.5px;cursor:pointer">ביטול</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ it.notConfirming }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ it.askRemove }}" style="width:26px;height:26px;border-radius:7px;border:none;background:var(--paper);color:#B25A4E;font-size:15px;cursor:pointer;flex-shrink:0">×</button>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
       </div>
 
       <div style="display:flex;flex-direction:column;gap:16px">
@@ -400,11 +447,15 @@
           <input value="{{ manualItem }}" onInput="{{ onManualItem }}" onKeyDown="{{ onManualKey }}" placeholder="שם המוצר..." style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--paper2);font-size:14.5px;outline:none;margin-bottom:10px">
           <div style="display:flex;gap:10px;margin-bottom:10px">
             <select value="{{ manualCat }}" onChange="{{ onManualCat }}" style="flex:1.4;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:var(--paper2);font-size:14px;color:var(--ink)">
-              <sc-for list="{{ shopCatOptions }}" as="o" hint-placeholder-count="9"><option value="{{ o.k }}">{{ o.label }}</option></sc-for>
+              <sc-for list="{{ shopCatOptions }}" as="o" hint-placeholder-count="10"><option value="{{ o.k }}">{{ o.label }}</option></sc-for>
             </select>
             <input value="{{ manualQty }}" onInput="{{ onManualQty }}" onKeyDown="{{ onManualKey }}" placeholder="כמות" style="flex:1;min-width:0;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:var(--paper2);font-size:14px;outline:none">
           </div>
+          <input value="{{ manualNote }}" onInput="{{ onManualNote }}" onKeyDown="{{ onManualKey }}" placeholder="הערה (אופציונלי)..." style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--paper2);font-size:14px;outline:none;margin-bottom:10px">
           <button onClick="{{ addManual }}" style="width:100%;padding:12px;border-radius:12px;border:none;background:var(--olive);color:#fff;font-size:15px;font-weight:700;cursor:pointer">הוסף לרשימה</button>
+          <sc-if value="{{ manualMsg }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:10px;font-size:13px;color:var(--olive-d);text-align:center">{{ manualMsg }}</div>
+          </sc-if>
         </div>
         <sc-if value="{{ hasInFridge }}" hint-placeholder-val="{{ false }}">
           <div style="background:var(--paper2);border:1px solid var(--line);border-radius:18px;padding:18px">
@@ -418,6 +469,7 @@
         </sc-if>
       </div>
     </div>
+    </sc-if>
   </section>
   </sc-if>
 
@@ -598,10 +650,12 @@ class Component extends DCLogic {
     detailDay: 'sun', detailSlot: 'dinner', detailToast: '',
     weekly: {}, // "day|slot" -> [ids]
     fridge: [], fridgeText: '', fridgeSearch: '', fridgeSuggest: false,
-    shopping: [], // {id, name, qty, cat, bought, manual}
+    shoppingItems: [], // rows from Supabase's shopping_items table
+    shoppingLoading: false, shoppingError: null,
+    confirmDeleteId: null,
     inFridgeList: [],
     favorites: [], history: [],
-    manualItem: '', manualCat: 'שונות', manualQty: '',
+    manualItem: '', manualCat: 'שונות', manualQty: '', manualNote: '', manualMsg: '',
     saved: false,
     aiOpen: false, aiInput: '', aiMessages: [],
   };
@@ -704,8 +758,8 @@ class Component extends DCLogic {
 
   AI_CHIPS = ['ארוחת ערב עד 20 דקות','מתכון עם ביצים וגבינה','נשנושים לילדים בלי גלוטן','תפריט עשיר בחלבון'];
 
-  SHOP_CATS = ['ירקות ופירות','מוצרי חלב וביצים','בשר, עוף ודגים','קטניות, דגנים ופסטה','מזווה ותבלינים','קפואים','לחמים ומאפים','מוצרים לתינוקות','שונות'];
-  CAT_ICON = {'ירקות ופירות':'🥕','מוצרי חלב וביצים':'🥚','בשר, עוף ודגים':'🍗','קטניות, דגנים ופסטה':'🌾','מזווה ותבלינים':'🫙','קפואים':'❄️','לחמים ומאפים':'🥖','מוצרים לתינוקות':'🍼','שונות':'🛒'};
+  SHOP_CATS = ['ירקות ופירות','מוצרי חלב וביצים','בשר, עוף ודגים','לחמים ומאפים','קטניות, דגנים ופסטה','מזווה ותבלינים','קפואים','מוצרים לתינוקות','ניקיון ומשק בית','שונות'];
+  CAT_ICON = {'ירקות ופירות':'🥕','מוצרי חלב וביצים':'🥚','בשר, עוף ודגים':'🍗','לחמים ומאפים':'🥖','קטניות, דגנים ופסטה':'🌾','מזווה ותבלינים':'🫙','קפואים':'❄️','מוצרים לתינוקות':'🍼','ניקיון ומשק בית':'🧹','שונות':'🛒'};
 
   // ---------- HELPERS ----------
   recipe(id){ return this.RECIPES.find(r=>r.id===id); }
@@ -738,7 +792,34 @@ class Component extends DCLogic {
   }
 
   // ---------- NAV ----------
-  go(s){ this.setState({screen:s}); if(typeof window!=='undefined') window.scrollTo({top:0}); }
+  go(s){
+    const leaving=this.state.screen;
+    if(leaving==='shopping' && s!=='shopping') this.leaveShopping();
+    this.setState({screen:s});
+    if(s==='shopping' && leaving!=='shopping') this.enterShopping();
+    if(typeof window!=='undefined') window.scrollTo({top:0});
+  }
+  refreshShoppingItems(){
+    window.ShoppingAPI.fetchShoppingItems()
+      .then(items=>this.setState({shoppingItems:items}))
+      .catch(err=>console.error(err));
+  }
+  enterShopping(){
+    this.setState({shoppingLoading:true, shoppingError:null});
+    window.ShoppingAPI.fetchShoppingItems().then(items=>{
+      this.setState({shoppingItems:items, shoppingLoading:false});
+    }).catch(err=>{
+      console.error(err);
+      this.setState({shoppingLoading:false, shoppingError:'שגיאה בטעינת רשימת הקניות. נסו לרענן את הדף.'});
+    });
+    this._unsubShopping=window.ShoppingAPI.subscribeToShoppingChanges(()=>this.refreshShoppingItems());
+  }
+  leaveShopping(){
+    if(this._unsubShopping){ this._unsubShopping(); this._unsubShopping=null; }
+  }
+  componentWillUnmount(){
+    this.leaveShopping();
+  }
   ensureShown(){
     if(this.state.shownIds.length===0){
       const f=this.filtered(this.state.activeMeal);
@@ -813,12 +894,20 @@ class Component extends DCLogic {
     Object.values(this.state.weekly).forEach(arr=>arr.forEach(id=>ids.add(id)));
     const list=[]; const inFridge=[];
     ids.forEach(id=>{ const r=this.recipe(id); if(r) this.collectInto(list, inFridge, r); });
-    // preserve "bought" state for items that were already on the list
-    const prev=this.state.shopping;
-    list.forEach(it=>{ const p=prev.find(x=>x.name===it.name && !x.manual); if(p) it.bought=p.bought; });
-    const manual=prev.filter(x=>x.manual);
-    this.setState({shopping:[...list, ...manual], inFridgeList:inFridge, screen:'shopping'});
-    if(typeof window!=='undefined') window.scrollTo({top:0});
+    // Adds/updates this week's ingredients into the shared Supabase list.
+    // Deliberately does NOT replace the whole list (unlike the old local-only
+    // version) — since the list is now shared across devices, wiping it out
+    // from one person's "build" click would be unsafe.
+    Promise.all(list.map(item=>window.ShoppingAPI.addShoppingItem({
+      name:item.name, category:item.cat, quantity:this.qtyString(item), note:null,
+    }))).then(()=>{
+      this.setState({inFridgeList:inFridge});
+    }).catch(err=>{
+      console.error(err);
+      this.setState({shoppingError:'שגיאה בבניית רשימת הקניות מהתפריט השבועי'});
+    }).finally(()=>{
+      this.go('shopping');
+    });
   }
 
   // ---------- AI ----------
@@ -959,19 +1048,28 @@ class Component extends DCLogic {
       })
     }));
 
-    // shopping — fixed supermarket departments
+    // shopping — fixed supermarket departments, backed by Supabase (state.shoppingItems)
+    const shopItemVM=(it)=>({
+      id:it.id, name:it.name, qty:it.quantity||'', note:it.note||'', hasNote:!!it.note,
+      confirming:S.confirmDeleteId===it.id, notConfirming:S.confirmDeleteId!==it.id,
+      mark:it.is_purchased?'✓':'',
+      boxBd:it.is_purchased?'var(--olive)':'var(--line)', boxBg:it.is_purchased?'var(--olive)':'transparent',
+      strike:it.is_purchased?'text-decoration:line-through;opacity:.5':'',
+      toggle:()=>this.toggleBought(it.id, !it.is_purchased),
+      askRemove:()=>this.setState({confirmDeleteId:it.id}),
+      cancelRemove:()=>this.setState({confirmDeleteId:null}),
+      confirmRemove:()=>this.removeShop(it.id),
+    });
+    const activeShoppingItems=S.shoppingItems.filter(it=>!it.is_purchased);
+    const purchasedShoppingItems=S.shoppingItems.filter(it=>it.is_purchased);
     const shopCats=this.SHOP_CATS.map(cat=>{
-      const items=S.shopping.filter(it=>it.cat===cat).map(it=>({
-        name:it.name, qty:this.qtyString(it), mark:it.bought?'✓':'',
-        boxBd:it.bought?'var(--olive)':'var(--line)', boxBg:it.bought?'var(--olive)':'transparent',
-        strike:it.bought?'text-decoration:line-through;opacity:.5':'',
-        toggle:()=>this.toggleBought(it.id), remove:()=>this.removeShop(it.id),
-      }));
+      const items=activeShoppingItems.filter(it=>it.category===cat).map(shopItemVM);
       return {name:cat, icon:this.CAT_ICON[cat]||'🛒', count:items.length,
         countLabel:items.length===1?'מוצר אחד':items.length+' מוצרים',
         headGap:items.length>0?'2px':'0', hasItems:items.length>0, noItems:items.length===0, items};
     });
     const shopCatOptions=this.SHOP_CATS.map(c=>({k:c, label:c}));
+    const purchasedItems=purchasedShoppingItems.map(shopItemVM);
 
     // favorites
     const favoriteRecipes=S.favorites.map(id=>this.recipe(id)).filter(Boolean).map(r=>({
@@ -1022,7 +1120,11 @@ class Component extends DCLogic {
       startPlanning:()=>this.go('family'), goHome:()=>this.go('home'), goFridge:()=>this.go('fridge'),
       goFamily:()=>this.go('family'), goMenuType:()=>this.go('menutype'), goMeals:()=>this.go('meals'),
       // family
-      family:F, counters, babyAges,
+      // pre-existing bug fix: {{ family.people }} is used in 3 places (shopping
+      // header, recipe detail modal x2) but `family` never actually included a
+      // `people` field, so it always rendered blank. Adding it here, not
+      // changing anything else about this prop.
+      family:{...F, people}, counters, babyAges,
       toggleBaby:()=>setF({hasBaby:!F.hasBaby}),
       babyTrackBg:F.hasBaby?'var(--olive)':'var(--cream2)',
       babyKnobSide:F.hasBaby?'left':'right',
@@ -1043,11 +1145,15 @@ class Component extends DCLogic {
       saveWeekly:()=>this.setState({saved:true}), saveLabel:S.saved?'נשמר ✓':'שמור תפריט',
       budgetNote: S.budget? `התפריט נבנה תוך ניסיון לשמור על תקציב של עד ${S.budget} ₪ לשבוע.` : 'בחרו מתכונים והוסיפו אותם לימים. אפשר להחליף או לרענן כל מנה.',
       // shopping
-      shopCats, shopCatOptions, totalShop:S.shopping.length,
-      hasShopping:S.shopping.length>0, noShopping:S.shopping.length===0,
-      manualItem:S.manualItem, onManualItem:(e)=>this.setState({manualItem:e.target.value}),
+      shopCats, shopCatOptions,
+      shoppingLoading:S.shoppingLoading, shoppingError:S.shoppingError,
+      shoppingReady:!S.shoppingLoading && !S.shoppingError,
+      hasPurchased:purchasedItems.length>0, purchasedCount:purchasedItems.length, purchasedItems,
+      manualItem:S.manualItem, onManualItem:(e)=>this.setState({manualItem:e.target.value, manualMsg:''}),
       manualQty:S.manualQty, onManualQty:(e)=>this.setState({manualQty:e.target.value}),
       manualCat:S.manualCat, onManualCat:(e)=>this.setState({manualCat:e.target.value}),
+      manualNote:S.manualNote, onManualNote:(e)=>this.setState({manualNote:e.target.value}),
+      manualMsg:S.manualMsg,
       onManualKey:(e)=>{ if(e.key==='Enter') this.addManual(); },
       addManual:()=>this.addManual(),
       hasInFridge:S.inFridgeList.length>0, inFridgeItems:S.inFridgeList,
@@ -1089,27 +1195,52 @@ class Component extends DCLogic {
     const f=this.state.favorites;
     this.setState({favorites:f.includes(id)?f.filter(x=>x!==id):[...f,id]});
   }
-  toggleBought(id){
-    this.setState({shopping:this.state.shopping.map(x=>x.id===id?{...x,bought:!x.bought}:x)});
+  toggleBought(id, isPurchased){
+    window.ShoppingAPI.togglePurchased(id, isPurchased)
+      .then(()=>this.refreshShoppingItems())
+      .catch(err=>{ console.error(err); this.setState({shoppingError:'שגיאה בעדכון המוצר.'}); });
   }
-  removeShop(id){ this.setState({shopping:this.state.shopping.filter(x=>x.id!==id)}); }
+  removeShop(id){
+    window.ShoppingAPI.deleteShoppingItem(id)
+      .then(()=>{ this.setState({confirmDeleteId:null}); this.refreshShoppingItems(); })
+      .catch(err=>{ console.error(err); this.setState({shoppingError:'שגיאה במחיקת המוצר.'}); });
+  }
   addManual(){
-    const v=this.state.manualItem.trim(); if(!v) return;
-    const item={id:'m-'+Date.now(), name:v, qtyText:this.state.manualQty.trim(), cat:this.state.manualCat||'שונות', bought:false, manual:true};
-    this.setState({shopping:[...this.state.shopping, item], manualItem:'', manualQty:''});
+    const name=this.state.manualItem.trim();
+    if(!name){ this.setState({manualMsg:'צריך להזין שם מוצר'}); return; }
+    const category=this.state.manualCat||'שונות';
+    const quantity=this.state.manualQty.trim()||null;
+    const note=this.state.manualNote.trim()||null;
+    window.ShoppingAPI.addShoppingItem({name, category, quantity, note}).then(({wasDuplicate})=>{
+      this.setState({
+        manualItem:'', manualQty:'', manualNote:'',
+        manualMsg: wasDuplicate ? 'המוצר כבר קיים ברשימה – הכמות עודכנה.' : 'המוצר נוסף לרשימה.',
+      });
+      this.refreshShoppingItems();
+    }).catch(err=>{
+      console.error(err);
+      this.setState({manualMsg:'שגיאה בהוספת המוצר. נסו שוב.'});
+    });
   }
   addDetailShop(r){
     if(!r) return;
-    const list=this.state.shopping.map(x=>({...x, units:{...(x.units||{})}}));
-    const inFridge=this.state.inFridgeList.slice();
+    const list=[]; const inFridge=this.state.inFridgeList.slice();
     this.collectInto(list, inFridge, r);
-    this.setState({shopping:list, inFridgeList:inFridge, detailToast:'נוסף לרשימת הקניות ✓'});
+    Promise.all(list.map(item=>window.ShoppingAPI.addShoppingItem({
+      name:item.name, category:item.cat, quantity:this.qtyString(item), note:null,
+    }))).then(()=>{
+      this.setState({inFridgeList:inFridge, detailToast:'נוסף לרשימת הקניות ✓'});
+      if(this.state.screen==='shopping') this.refreshShoppingItems();
+    }).catch(err=>{
+      console.error(err);
+      this.setState({detailToast:'שגיאה בהוספה לרשימת הקניות'});
+    });
   }
   exportWa(){
     let txt='🛒 רשימת קניות — מתכנן ארוחות משפחתי\n\n';
     this.SHOP_CATS.forEach(c=>{
-      const items=this.state.shopping.filter(x=>x.cat===c);
-      if(items.length){ txt+=`*${c}*\n`; items.forEach(i=>{ const q=this.qtyString(i); txt+=`▫️ ${i.name}${q?' — '+q:''}\n`; }); txt+='\n'; }
+      const items=this.state.shoppingItems.filter(x=>x.category===c && !x.is_purchased);
+      if(items.length){ txt+=`*${c}*\n`; items.forEach(i=>{ txt+=`▫️ ${i.name}${i.quantity?' — '+i.quantity:''}\n`; }); txt+='\n'; }
     });
     if(this.state.inFridgeList.length){ txt+=`*כבר יש בבית*\n`; this.state.inFridgeList.forEach(n=>txt+=`✓ ${n}\n`); }
     const url='https://wa.me/?text='+encodeURIComponent(txt);
